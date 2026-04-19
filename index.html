@@ -421,6 +421,43 @@
   }
 
   .mode-btn .icon { font-size: 20px; display: block; margin-bottom: 4px; }
+
+  /* Upload button */
+  .upload-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .upload-btn:hover { background: var(--border); color: var(--text); }
+
+  /* File tags */
+  .file-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(240, 136, 62, 0.12);
+    border: 1px solid rgba(240, 136, 62, 0.3);
+    color: var(--accent);
+    padding: 4px 10px;
+    border-radius: 16px;
+    font-size: 12px;
+  }
+  .file-tag .remove {
+    cursor: pointer;
+    opacity: 0.6;
+    font-size: 14px;
+  }
+  .file-tag .remove:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -468,11 +505,16 @@
 
 <!-- Input -->
 <div class="input-area">
+  <div id="filePreview" style="max-width:780px;margin:0 auto 8px;padding:0;display:none;flex-wrap:wrap;gap:6px;"></div>
   <div class="input-wrapper">
+    <label class="upload-btn" title="上传参考素材">
+      <input type="file" id="fileInput" accept=".txt,.md,.csv,.json,.html,.xml" multiple style="display:none" onchange="handleFileUpload(event)">
+      📎
+    </label>
     <textarea class="input-box" id="userInput" placeholder="输入你的问题，或描述想要创作的文章主题…" rows="1" onkeydown="handleKey(event)"></textarea>
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
   </div>
-  <div class="input-hint">内容由 AI 生成，仅供学习交流，不构成投资建议</div>
+  <div class="input-hint">支持上传 txt/md/csv 文件作为参考素材 · 内容由 AI 生成，仅供学习交流</div>
 </div>
 
 <script>
@@ -482,81 +524,144 @@ const API_KEY = 'sk-ae26adf42c4a4c49b23aa2a70e799a7b';
 const MODEL   = 'deepseek-chat';
 
 // ========== SYSTEM PROMPT ==========
-const SYSTEM_PROMPT = `你是「星辰大海的边界」公众号的作者"福建"。你是一位95后投资人，2014年大学期间开户入市。
+const SYSTEM_PROMPT = `你是「星辰大海的边界」公众号的作者"福建"。你是一位95后独立投资人，2014年大学期间开户入市，历经多轮牛熊，形成了独特的产业趋势投资风格。
+
+## ⚡ 最高优先级：锐度要求
+
+你的每一段输出都必须满足"锐度检验"——读者看完后要有"卧槽，这个角度我没想到"的感觉。
+
+### 锐度规则（强制执行）：
+1. **每篇文章/回答必须有至少1个反共识观点**。不要说大家都知道的废话。市场已经price in的东西不值得写。
+2. **给具体判断，不给模糊方向**。错了也比不说强。例如：不要说"半导体可能有机会"，要说"设备比芯片更值得关注，因为二阶导效应，业绩弹性更大"。
+3. **提供独特的分析框架或类比**，让读者获得可迁移的思考工具。例如："渗透率低的时候容错率最高"就是一个可复用的框架。
+4. **用内部人视角说话**，像饭局上大佬聊天而不是分析师写报告。例如："昨晚参加了一个产业里的饭局，光模块大厂高管说上游要涨价"。
+5. **敢于表达强观点**，然后给出支撑逻辑。"我认为XXX，原因有三个"比"从多个角度来看"好一万倍。
+6. **禁止以下低锐度表达**：
+   - ❌ "值得关注"（太弱，改为"这是当前最被低估的方向"）
+   - ❌ "可能会有机会"（太弱，改为"这里大概率会爆发，逻辑如下"）
+   - ❌ "综合来看"、"总的来说"（禁用）
+   - ❌ 空泛的行业科普（读者不需要你告诉他们AI是什么）
+   - ❌ 面面俱到的两方面分析（要有立场，要有态度）
 
 ## 身份
-- 笔名：福建（来自福建）
-- 自称：多用"笔者"，偶尔用"我"
+- 笔名：福建（来自福建），自称"笔者"或"我"
+- 圈子里认识很多产业人士和基金经理，经常引用私下聊天的信息
 - 读者称呼：朋友们、读者们、大家
 
-## 写作风格（必须严格遵守）
+## 写作风格
 
 ### 语气
-- 聊天感极强，像朋友圈私聊，不端着不说教
-- 口语化："说白了"、"说起来也奇怪"、"其实吧"、"确实"
-- 自嘲+真实：公开承认错误和亏损
-- 幽默调侃：老马"整活"、老黄"放着大客户不吹"
-- 热血但不盲目，看多时加风险提示
+- 聊天感极强，像跟老朋友喝酒聊股票，不端着
+- 口语化但有密度："说白了"、"其实吧"、"确实"、"你们可能想不到"
+- 敢自嘲、敢承认错误："之前看走眼了"、"心态崩了"
+- 幽默调侃：老马"整活"、"物理定律不存在了"、"黄老板为了不当首富够拼的"
 
 ### 文章结构
-- 开场钩子（个人经历/新闻/金句）→ 核心论点 → 分点论证(1）2）3）) → 收束展望
-- 编号用"1）2）3）"，不用markdown标题
-- 不用"首先其次再次最后"的八股结构
-- 不说"综上所述"、"总而言之"
+- 开场钩子（1-3行，必须抓人，可以是爆炸性观点/反直觉事实/个人故事）
+- 核心论点（一句话金句）
+- 分点论证（1）2）3），每点要有数据或案例支撑
+- 收束（留白式反问 或 金句式收尾，不要烂尾）
 
 ### 论证方式
-- 产业逻辑链：宏观→趋势→供需矛盾→细分方向
-- 历史类比："当前XX像2020年的新能源"
-- 人物引用：巴菲特、段永平("阿段")、马斯克("老马")、黄仁勋("老黄")
-- 数据支撑：精确但不堆砌
-- 金融黑话+大白话翻译
+- **产业链拆解**：从终端需求→中间品→上游设备材料，找到矛盾最尖锐的环节
+- **历史类比**：用历史上类似的产业周期做参照，给出时间和空间的锚
+- **内部人信息**：引用圈内饭局、微信群、朋友圈的信息（制造信息不对称感）
+- **数据钉子**：每个观点至少配一个精确数据，但不堆砌
 
-### 高频词汇
-景气度、催化、分歧、共振、轮动、主线、赛道、带血筹、二阶导、国产替代、渗透率、alpha/beta
+### 高频词汇与自造词
+景气度、催化、分歧、共振、轮动、主线、赛道、带血筹、二阶导、老登股、古典算力、神秘资金、逃逸速度
 
-### 自造词
-老登股（老蓝筹）、古典算力、带血筹、神秘资金、逃逸速度
+## 核心投资框架
 
-## 核心投资观点体系
-
-### 底层信念
-- 看多中国，看多科技
-- "悲观者正确，但乐观者才能赚钱"
-- 产业趋势投资："缺啥买啥"
-- 概率估值法：终局×概率
+### 方法论
+- 产业趋势投资："缺啥买啥"，找阶段性矛盾最尖锐的环节
+- 概率估值法：终局市场规模 × 实现概率 = 合理市值
+- 带血筹策略：恐惧贪婪指数到极端时果断出手
+- 数星星不如数月亮，数月亮不如数太阳（买龙头）
 
 ### 市场认知
-- A股："涨多了一定跌，跌多了一定涨"
-- 港股：像潮汐，赚钱概率低但赔率高
-- 美股：强者恒强，听美联储的话
-- 资金面：险资最坚定，量化占1/3成交，外资看汇率
+- A股是投票机器，短期看资金情绪，中期看产业趋势，长期看国运
+- 港股像潮汐，适合套利（发酵套利、跨市场、入通入指数）
+- 美股强者恒强，M7主导，听美联储的话
+- 险资最坚定、量化占1/3成交、外资看汇率
 
-### 产业判断
-- AI："2026大模型=2006互联网"，从I到R切换
-- 半导体：国产替代核心叙事，设备是二阶导
-- 商业航天：类比2020新能源
-- 消费/医药：十年一遇的跷跷板机会
-- 大宗：全球大通胀时代重启
+### 产业判断（给强观点）
+- AI："2026大模型=2006互联网"，矛盾从算力转向应用
+- 半导体：设备是二阶导，弹性比芯片大，替代欧美设备/日本材料
+- 商业航天：类比2020新能源，渗透率极低，容错率最高
+- 消费/医药：十年一遇的跷跷板机会，集采出清后的黎明
+- 大宗：全球大通胀时代，过去十年的范式不适用了
 
-### 金句（适当引用）
-- "缺啥东西，咱就买啥行业的股票"
-- "数星星不如数月亮，数月亮不如数太阳"
-- "集中投资是一把屠龙刀"
-- "投资不止是为了赚钱，而是修行的一部分"
+### 金句（写作时自然嵌入）
+- "悲观者正确，但乐观者才能赚钱"
+- "集中投资是一把屠龙刀，没有确定把握时让它呆在鞘里"
+- "泼天的富贵洒下来一定要用盆来接"
 - "他强任他强，清风拂山岗"
+- "投资不止是为了赚钱，而是修行的一部分"
 
 ## 注意事项
-- 不推荐具体金融产品或ETF代码
-- 不提供具体买卖时点建议
-- 保持"看多中国、看多科技、理性乐观"的基调
-- 内容仅供学习交流，不构成投资建议
-- 回答要有深度，不要空泛
-- 写文章时自然分段，每段3-5行`;
+- 不推荐具体金融产品代码或ETF
+- 不提供具体买卖时点
+- 保持"看多中国、看多科技、理性乐观"基调
+- 内容仅供学习交流
+- 如果用户上传了参考素材，要深度消化后融入自己的分析框架，而不是简单复述`;
 
 // ========== STATE ==========
 let messages = [];
 let currentMode = 'chat';
 let isStreaming = false;
+let uploadedFiles = []; // { name, content, truncated }
+
+// ========== FILE UPLOAD ==========
+function handleFileUpload(event) {
+  const files = event.target.files;
+  if (!files.length) return;
+
+  for (const file of files) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      let content = e.target.result;
+      let truncated = false;
+      // Limit to ~8000 chars per file to save context window
+      if (content.length > 8000) {
+        content = content.substring(0, 8000);
+        truncated = true;
+      }
+      uploadedFiles.push({ name: file.name, content, truncated });
+      renderFileTags();
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+  // Reset file input so same file can be re-uploaded
+  event.target.value = '';
+}
+
+function removeFile(index) {
+  uploadedFiles.splice(index, 1);
+  renderFileTags();
+}
+
+function renderFileTags() {
+  const preview = document.getElementById('filePreview');
+  if (uploadedFiles.length === 0) {
+    preview.style.display = 'none';
+    preview.innerHTML = '';
+    return;
+  }
+  preview.style.display = 'flex';
+  preview.innerHTML = uploadedFiles.map((f, i) =>
+    `<div class="file-tag">📄 ${f.name}${f.truncated ? ' (已截取)' : ''}<span class="remove" onclick="removeFile(${i})">✕</span></div>`
+  ).join('');
+}
+
+function buildFileContext() {
+  if (uploadedFiles.length === 0) return '';
+  let ctx = '\n\n---\n以下是用户上传的参考素材，请深度消化后融入你的分析框架，提取核心信息并用你自己的风格重新表达，不要简单复述：\n\n';
+  for (const f of uploadedFiles) {
+    ctx += `【${f.name}】\n${f.content}\n\n`;
+  }
+  return ctx;
+}
 
 // ========== MODE ==========
 function setMode(mode) {
@@ -695,6 +800,15 @@ async function sendMessage() {
   addMessage('user', text);
   input.value = '';
   input.style.height = 'auto';
+
+  // Append file context if any
+  const fileCtx = buildFileContext();
+  if (fileCtx) {
+    userContent += fileCtx;
+    // Clear files after sending
+    uploadedFiles = [];
+    renderFileTags();
+  }
 
   messages.push({ role: 'user', content: userContent });
 

@@ -2,8 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>星辰大海的边界 — AI 创作助手</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -25,9 +26,15 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     background: var(--bg);
     color: var(--text);
-    height: 100vh;
+    height: 100dvh;
+    height: 100vh; /* fallback */
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+  }
+
+  @supports (height: 100dvh) {
+    body { height: 100dvh; }
   }
 
   /* Header */
@@ -153,8 +160,76 @@
     line-height: 1.7;
     font-size: 14.5px;
     max-width: 85%;
-    white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .message.user .msg-content {
+    white-space: pre-wrap;
+  }
+
+  /* Markdown rendered content styles */
+  .msg-content p { margin: 0 0 8px 0; }
+  .msg-content p:last-child { margin-bottom: 0; }
+  .msg-content h1, .msg-content h2, .msg-content h3 {
+    margin: 16px 0 8px 0;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .msg-content h1 { font-size: 1.3em; }
+  .msg-content h2 { font-size: 1.15em; }
+  .msg-content h3 { font-size: 1.05em; }
+  .msg-content ul, .msg-content ol {
+    margin: 6px 0;
+    padding-left: 20px;
+  }
+  .msg-content li { margin: 3px 0; }
+  .msg-content blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 8px 0;
+    padding: 4px 12px;
+    color: var(--text-dim);
+    background: rgba(240, 136, 62, 0.06);
+    border-radius: 0 6px 6px 0;
+  }
+  .msg-content code {
+    background: rgba(255,255,255,0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: "SF Mono", "Fira Code", "Menlo", monospace;
+  }
+  .msg-content pre {
+    background: rgba(0,0,0,0.3);
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .msg-content pre code {
+    background: none;
+    padding: 0;
+  }
+  .msg-content strong { color: var(--accent); font-weight: 600; }
+  .msg-content em { color: var(--text-dim); }
+  .msg-content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 12px 0;
+  }
+  .msg-content table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    width: 100%;
+    font-size: 13px;
+  }
+  .msg-content th, .msg-content td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+  }
+  .msg-content th {
+    background: rgba(255,255,255,0.05);
+    font-weight: 600;
   }
 
   .message.ai .msg-content {
@@ -226,7 +301,8 @@
   .input-area {
     background: var(--surface);
     border-top: 1px solid var(--border);
-    padding: 16px 24px;
+    padding: 12px 24px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     flex-shrink: 0;
   }
 
@@ -498,6 +574,14 @@ function setMode(mode) {
 }
 
 // ========== UI HELPERS ==========
+function renderMarkdown(text) {
+  try {
+    return marked.parse(text, { breaks: true, gfm: true });
+  } catch (e) {
+    return escapeHtml(text);
+  }
+}
+
 function addMessage(role, content) {
   const container = document.getElementById('chatContainer');
 
@@ -516,7 +600,8 @@ function addMessage(role, content) {
     ? '<div class="msg-avatar ai">🌊</div>'
     : '<div class="msg-avatar user-avatar">👤</div>';
 
-  div.innerHTML = `${avatar}<div class="msg-content">${escapeHtml(content)}</div>`;
+  const renderedContent = role === 'ai' ? renderMarkdown(content) : escapeHtml(content);
+  div.innerHTML = `${avatar}<div class="msg-content">${renderedContent}</div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
   return div;
@@ -548,6 +633,49 @@ const input = document.getElementById('userInput');
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 150) + 'px';
+});
+
+// ========== MOBILE KEYBOARD ADAPTATION ==========
+// Use visualViewport API to adapt when virtual keyboard appears
+if (window.visualViewport) {
+  const chatContainer = document.getElementById('chatContainer');
+  const inputArea = document.querySelector('.input-area');
+
+  function onViewportResize() {
+    const vv = window.visualViewport;
+    // Calculate keyboard height
+    const keyboardHeight = window.innerHeight - vv.height;
+
+    if (keyboardHeight > 100) {
+      // Keyboard is open — adjust layout
+      document.body.style.height = vv.height + 'px';
+      // Scroll chat to bottom
+      requestAnimationFrame(() => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      });
+    } else {
+      // Keyboard closed — restore
+      document.body.style.height = '';
+    }
+  }
+
+  window.visualViewport.addEventListener('resize', onViewportResize);
+  window.visualViewport.addEventListener('scroll', onViewportResize);
+}
+
+// Also handle focus/blur for older browsers
+input.addEventListener('focus', () => {
+  setTimeout(() => {
+    const chatContainer = document.getElementById('chatContainer');
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    // On iOS, scroll input into view
+    input.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, 300);
+});
+
+input.addEventListener('blur', () => {
+  // Restore body height on blur
+  setTimeout(() => { document.body.style.height = ''; }, 100);
 });
 
 // ========== SEND MESSAGE ==========
@@ -628,7 +756,7 @@ async function sendMessage() {
           const delta = json.choices?.[0]?.delta?.content;
           if (delta) {
             fullText += delta;
-            contentEl.innerHTML = escapeHtml(fullText);
+            contentEl.innerHTML = renderMarkdown(fullText);
             document.getElementById('chatContainer').scrollTop =
               document.getElementById('chatContainer').scrollHeight;
           }

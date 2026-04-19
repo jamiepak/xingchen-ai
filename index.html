@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>星辰大海的边界 — AI 创作助手</title>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/lib/marked.umd.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -681,9 +681,13 @@ function setMode(mode) {
 // ========== UI HELPERS ==========
 function renderMarkdown(text) {
   try {
-    return marked.parse(text, { breaks: true, gfm: true });
+    // marked v15+ UMD: window.marked is an object with .parse()
+    // marked v4-: window.marked is the parse function itself
+    const parse = (typeof marked === 'function') ? marked : (marked.parse || marked);
+    return parse(text, { breaks: true, gfm: true });
   } catch (e) {
-    return escapeHtml(text);
+    console.error('Markdown parse error:', e);
+    return escapeHtml(text).replace(/\n/g, '<br>');
   }
 }
 

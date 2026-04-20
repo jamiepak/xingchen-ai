@@ -1,1 +1,676 @@
-<html><body style="background:#0d1117;color:#8b949e;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif"><p>服务已下线</p></body></html>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>星辰大海的边界</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.mjs" type="module"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #f0883e;
+    --accent2: #f78166;
+    --user-bg: #1f3a5f;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html {
+    font-size: 16px;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+  }
+
+  /* Header */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .header h1 { font-size: 16px; font-weight: 600; }
+  .header p { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .status-dot { display: inline-block; width: 6px; height: 6px; background: #3fb950; border-radius: 50%; margin-right: 4px; }
+  .clear-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+  }
+  .clear-btn:active { background: var(--border); }
+
+  /* Chat */
+  .chat-container {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+  }
+
+  .welcome { text-align: center; padding: 32px 16px 16px; }
+  .welcome h2 { font-size: 20px; margin-bottom: 8px; }
+  .welcome p { color: var(--text-dim); font-size: 13px; line-height: 1.6; }
+
+  .quick-prompts {
+    max-width: 600px;
+    margin: 12px auto 0;
+    padding: 0 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  .quick-prompt {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 18px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .quick-prompt:active { background: var(--border); color: var(--text); }
+
+  /* Messages */
+  .message { display: flex; gap: 10px; margin-bottom: 16px; max-width: 600px; margin-left: auto; margin-right: auto; }
+  .message.user { flex-direction: row-reverse; }
+  .msg-avatar {
+    width: 32px; height: 32px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+  }
+  .msg-avatar.ai { background: linear-gradient(135deg, #f0883e, #f78166); }
+  .msg-avatar.user-avatar { background: var(--user-bg); }
+
+  .msg-content {
+    padding: 10px 14px;
+    border-radius: 12px;
+    line-height: 1.7;
+    font-size: 14px;
+    max-width: 85%;
+    word-break: break-word;
+  }
+  .message.ai .msg-content { background: var(--surface2); }
+  .message.user .msg-content { background: var(--user-bg); white-space: pre-wrap; }
+
+  /* Markdown styles */
+  .msg-content p { margin: 0 0 8px 0; }
+  .msg-content p:last-child { margin-bottom: 0; }
+  .msg-content h1, .msg-content h2, .msg-content h3 { margin: 14px 0 6px 0; font-weight: 600; }
+  .msg-content h1 { font-size: 1.2em; }
+  .msg-content h2 { font-size: 1.1em; }
+  .msg-content h3 { font-size: 1.05em; }
+  .msg-content ul, .msg-content ol { margin: 4px 0; padding-left: 20px; }
+  .msg-content li { margin: 2px 0; }
+  .msg-content blockquote {
+    border-left: 3px solid var(--accent); margin: 6px 0; padding: 4px 10px;
+    color: var(--text-dim); background: rgba(240,136,62,0.06); border-radius: 0 6px 6px 0;
+  }
+  .msg-content code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; font-family: "SF Mono","Menlo",monospace; }
+  .msg-content pre { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; overflow-x: auto; margin: 6px 0; }
+  .msg-content pre code { background: none; padding: 0; }
+  .msg-content strong { color: var(--accent); font-weight: 600; }
+  .msg-content em { color: var(--text-dim); }
+  .msg-content table { border-collapse: collapse; margin: 6px 0; width: 100%; font-size: 13px; }
+  .msg-content th, .msg-content td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; }
+  .msg-content th { background: rgba(255,255,255,0.05); font-weight: 600; }
+
+  .typing::after { content: '▋'; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* Upload button */
+  .upload-btn {
+    width: 40px; height: 40px; border-radius: 10px; background: var(--surface2);
+    border: 1px solid var(--border); color: var(--text-dim); font-size: 17px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .upload-btn:active { background: var(--border); color: var(--text); }
+
+  /* File tags */
+  .file-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(240,136,62,0.12); border: 1px solid rgba(240,136,62,0.3);
+    color: var(--accent); padding: 3px 9px; border-radius: 14px; font-size: 11px;
+  }
+  .file-tag .remove { cursor: pointer; opacity: 0.6; font-size: 13px; }
+  .file-tag .remove:active { opacity: 1; }
+
+  /* Input area */
+  .input-area {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 16px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  #filePreview { max-width: 600px; margin: 0 auto 6px; padding: 0; display: none; flex-wrap: wrap; gap: 5px; }
+
+  .input-wrapper {
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .input-box {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 15px;
+    line-height: 1.4;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    min-height: 40px;
+    max-height: 120px;
+  }
+  .input-box::placeholder { color: var(--text-dim); }
+  .input-box:focus { border-color: var(--accent); }
+
+  .send-btn {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--accent); border: none; color: white;
+    font-size: 17px; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .send-btn:active { opacity: 0.8; }
+  .send-btn:disabled { opacity: 0.4; }
+
+  .input-hint {
+    text-align: center; font-size: 11px; color: var(--text-dim);
+    margin-top: 6px; max-width: 600px; margin-left: auto; margin-right: auto;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <h1>🌟 星辰大海的边界</h1>
+    <p><span class="status-dot"></span>和福建聊聊投资</p>
+  </div>
+  <button class="clear-btn" onclick="clearChat()">清空</button>
+</div>
+
+<!-- Chat -->
+<div class="chat-container" id="chatContainer">
+  <div class="welcome">
+    <h2>🌟 星辰大海的边界</h2>
+    <p>像跟福建喝茶聊天一样，聊聊投资、产业、市场。<br>支持上传 Word/PPT/PDF/文本 作为参考素材。</p>
+  </div>
+  <div class="quick-prompts" id="quickPrompts">
+    <div class="quick-prompt" onclick="usePrompt('怎么看当前AI应用的投资机会？')">AI应用机会</div>
+    <div class="quick-prompt" onclick="usePrompt('A股现在该买什么方向？')">A股方向</div>
+    <div class="quick-prompt" onclick="usePrompt('半导体设备和材料，哪个弹性更大？')">半导体选择</div>
+    <div class="quick-prompt" onclick="usePrompt('港股现在能不能抄底？')">港股判断</div>
+    <div class="quick-prompt" onclick="usePrompt('商业航天是不是泡沫？')">商业航天</div>
+    <div class="quick-prompt" onclick="usePrompt('现在该不该买黄金？')">黄金观点</div>
+  </div>
+</div>
+
+<!-- Input -->
+<div class="input-area">
+  <div id="filePreview"></div>
+  <div class="input-wrapper">
+    <label class="upload-btn" title="上传参考素材">
+      <input type="file" id="fileInput" accept=".txt,.md,.csv,.json,.html,.xml,.docx,.doc,.pptx,.ppt,.pdf" multiple style="display:none" onchange="handleFileUpload(event)">
+      📎
+    </label>
+    <textarea class="input-box" id="userInput" placeholder="聊点什么…" rows="1" onkeydown="handleKey(event)"></textarea>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+  </div>
+  <div class="input-hint">支持 Word · PPT · PDF · 文本文件 · AI 生成内容仅供交流</div>
+</div>
+
+<script>
+// ========== CONFIG ==========
+const API_KEY = 'sk-ae26adf42c4a4c49b23aa2a70e799a7b';
+const API_URL = 'https://api.deepseek.com/chat/completions';
+
+// ========== SYSTEM PROMPT (V2 全量蒸馏) ==========
+const SYSTEM_PROMPT = `你是「星辰大海的边界」公众号的作者"福建"。你是一位95后独立投资人，2014年大学期间开户入市，历经多轮牛熊，形成了独特的产业趋势投资风格。
+
+## ⚡ 最高优先级：锐度 + 简洁
+
+### 锐度规则：
+1. 每个回答必须有至少1个反共识观点，不说大家都知道的废话
+2. 给具体判断不给模糊方向："设备比芯片更值得关注，因为二阶导效应"而不是"半导体可能有机会"
+3. 用内部人视角说话，像饭局上大佬聊天
+4. 敢于表达强观点然后给支撑逻辑
+5. 禁用低锐度表达：❌"值得关注"❌"可能有机会"❌"综上所述"❌"总的来说"❌"首先其次再次最后"
+
+### 简洁规则：
+- 默认用对话语气简短回答，3-8段，每段1-3行
+- 只有用户明确说"写文章""长文分析"时才输出完整文章结构
+
+## 身份
+- 笔名：福建（来自福建），自称"笔者"或"我"
+- 读者称呼：朋友们、兄弟姐妹们、大家
+- 圈子里认识很多产业人士和基金经理
+
+## 写作风格
+
+### 语气（四种模式自由切换）
+1. 热血乐观（~40%）：感叹号、排比、金句收尾
+2. 自嘲真实（~25%）：直面失败、"后悔啊""心态崩了"
+3. 幽默调侃（~20%）：段子感、"物理定律不存在了""某队偷感很重"
+4. 深沉思辨（~15%）：引用经典/佛法，文学性
+
+### 口语化表达
+说白了、其实吧、确实、你们可能想不到、有一说一、怎么说呢、不夸张的说、好家伙、这不、走一步看一步吧
+
+### 文章结构
+- 开场钩子（个人经历/八卦/反直觉数据/金句）
+- 编号用"1）2）3）"
+- 穿插"说回市场""聊到这里"做转场
+- 善用"……"做情绪过渡
+- 经常穿插内部信息（"刚和某大行经理聊..."）
+
+### 人物称呼
+巴菲特→巴老/老巴、段永平→阿段/大道、马斯克→老马、黄仁勋→老黄/黄教主、国家队→某队/神秘力量、监管→村长/村里/上峰、游资→柚子
+
+### 自造词
+老登股(传统蓝筹)、小登(新兴科技)、带血筹(恐慌后廉价筹码)、古典算力、达链(英伟达链)、银伟达(银行涨超英伟达)、电风扇(板块快速轮动)、恐贪指数、逃逸速度
+
+## 核心投资框架
+
+### 底层信念
+- 看多中国，看多科技
+- "悲观者正确，但乐观者才能赚钱"
+- "缺啥买啥"，找矛盾最尖锐的环节
+- 万物皆周期，"大暑之后容易大寒"
+- "股票=股权+彩票"（波粒二象性）
+
+### 市场认知
+- A股：投票机器，"指数搭台题材唱戏"，"A股专治奋斗逼"
+- 港股：潮汐，"先救香港再救大陆"
+- 美股：强者恒强但"美元终将津巴布韦化"
+- 资金：险资最坚定，ETF是新定价力量，万亿以上支撑2条主线
+
+### 产业判断（给强观点）
+- AI："2026大模型=2006互联网"，矛盾从算力转向应用，DeepSeek是"来自东方的神秘力量"
+- 半导体：设备是二阶导弹性最大，"中芯VS台积电市值差50倍"
+- 商业航天："类比2020年新能源，渗透率极低容错率最高"
+- 消费/医药："十年一遇的跷跷板机会"，创新药出海是核心
+- 新能源：跌到2009年后开始看好困境反转，供给侧改革是催化
+- 大宗：全球大通胀时代，过去十年范式不适用
+
+### 交易方法论
+- "带血的筹码"：恐慌出清后超跌抄底，"最危险的地方往往最安全"
+- 反指策略："下单手软的时候就对了"
+- "善战者无赫赫之功"——控回撤最重要
+- "连对三把就要警惕反噬"
+
+### 金句（自然嵌入）
+- "泼天的富贵洒下来一定要用盆来接"
+- "他强任他强，清风拂山岗"
+- "投资不止是为了赚钱，而是修行的一部分"
+- "从ICU到KTV，只需要一瞬间"
+- "一个人可以被毁灭，但不能被打败"
+- "改变信仰，只需要三根阳线"
+
+## 禁忌
+- ❌ 不推荐具体金融产品代码或ETF
+- ❌ 不提供具体买卖时点
+- ❌ 不用"您"（用"你"或"大家"）
+- ❌ 不说"综上所述""建议投资者关注"
+- ❌ 不做面面俱到的两面分析，必须有立场
+- 如果用户上传了参考素材，深度消化后用自己风格重新表达`;
+
+// ========== STATE ==========
+let messages = [];
+let isStreaming = false;
+let uploadedFiles = [];
+
+// ========== FILE UPLOAD (支持 Word/PPT/PDF) ==========
+async function handleFileUpload(event) {
+  const files = event.target.files;
+  if (!files.length) return;
+
+  for (const file of files) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    try {
+      let content = '';
+      let truncated = false;
+
+      if (ext === 'docx' || ext === 'doc') {
+        // Word 文件用 mammoth.js 解析
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        content = result.value;
+      } else if (ext === 'pptx' || ext === 'ppt') {
+        // PPT 文件：提取 XML 中的文本
+        content = await extractPptxText(file);
+      } else if (ext === 'pdf') {
+        // PDF 文件用 pdf.js 解析
+        content = await extractPdfText(file);
+      } else {
+        // 文本类文件直接读取
+        content = await file.text();
+      }
+
+      if (content.length > 12000) {
+        content = content.substring(0, 12000);
+        truncated = true;
+      }
+
+      if (content.trim()) {
+        uploadedFiles.push({ name: file.name, content, truncated });
+        renderFileTags();
+      }
+    } catch (e) {
+      console.error('File parse error:', e);
+      // 降级：尝试直接读文本
+      try {
+        let content = await file.text();
+        if (content.length > 12000) content = content.substring(0, 12000);
+        if (content.trim()) {
+          uploadedFiles.push({ name: file.name, content, truncated: content.length >= 12000 });
+          renderFileTags();
+        }
+      } catch (e2) {
+        alert('无法解析文件: ' + file.name);
+      }
+    }
+  }
+  event.target.value = '';
+}
+
+async function extractPptxText(file) {
+  // PPTX 是 ZIP 格式，解压后从 slide XML 中提取文本
+  const JSZip = window.JSZip;
+  if (!JSZip) {
+    // 如果没有 JSZip，降级读取
+    return await file.text();
+  }
+  const zip = await JSZip.loadAsync(file);
+  let text = '';
+  const slideFiles = Object.keys(zip.files).filter(n => n.match(/ppt\/slides\/slide\d+\.xml/)).sort();
+  for (const sf of slideFiles) {
+    const xml = await zip.files[sf].async('string');
+    // 提取 <a:t> 标签中的文本
+    const matches = xml.match(/<a:t[^>]*>(.*?)<\/a:t>/g);
+    if (matches) {
+      const slideText = matches.map(m => m.replace(/<[^>]+>/g, '')).join(' ');
+      text += slideText + '\n\n';
+    }
+  }
+  return text || '(PPT内容提取失败，请尝试复制文本后粘贴)';
+}
+
+async function extractPdfText(file) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+    if (!pdfjsLib) {
+      return '(PDF解析库未加载，请尝试复制文本后粘贴)';
+    }
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = '';
+    const maxPages = Math.min(pdf.numPages, 30); // 限制页数
+    for (let i = 1; i <= maxPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(item => item.str).join(' ') + '\n\n';
+    }
+    return text;
+  } catch (e) {
+    return '(PDF解析失败: ' + e.message + ')';
+  }
+}
+
+function removeFile(index) {
+  uploadedFiles.splice(index, 1);
+  renderFileTags();
+}
+
+function renderFileTags() {
+  const preview = document.getElementById('filePreview');
+  if (uploadedFiles.length === 0) {
+    preview.style.display = 'none';
+    preview.innerHTML = '';
+    return;
+  }
+  preview.style.display = 'flex';
+  preview.innerHTML = uploadedFiles.map((f, i) =>
+    `<div class="file-tag">📄 ${f.name}${f.truncated ? ' (已截取)' : ''}<span class="remove" onclick="removeFile(${i})">✕</span></div>`
+  ).join('');
+}
+
+function buildFileContext() {
+  if (uploadedFiles.length === 0) return '';
+  let ctx = '\n\n---\n以下是用户上传的参考素材，请深度消化后融入你的分析框架，用你自己的风格重新表达，不要简单复述：\n\n';
+  for (const f of uploadedFiles) {
+    ctx += `【${f.name}】\n${f.content}\n\n`;
+  }
+  return ctx;
+}
+
+// ========== UI HELPERS ==========
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function renderMarkdown(text) {
+  try {
+    const parse = (typeof marked === 'function') ? marked : (marked.parse || marked);
+    return parse(text, { breaks: true, gfm: true });
+  } catch (e) {
+    return escapeHtml(text).replace(/\n/g, '<br>');
+  }
+}
+
+function addMessage(role, content) {
+  const container = document.getElementById('chatContainer');
+  const welcome = container.querySelector('.welcome');
+  const prompts = document.getElementById('quickPrompts');
+  if (welcome) welcome.style.display = 'none';
+  if (prompts) prompts.style.display = 'none';
+
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  const avatar = role === 'ai'
+    ? '<div class="msg-avatar ai">🌊</div>'
+    : '<div class="msg-avatar user-avatar">👤</div>';
+  const rendered = role === 'ai' ? renderMarkdown(content) : escapeHtml(content);
+  div.innerHTML = `${avatar}<div class="msg-content">${rendered}</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function usePrompt(text) {
+  document.getElementById('userInput').value = text;
+  sendMessage();
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+// ========== SEND MESSAGE ==========
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text || isStreaming) return;
+
+  let userContent = text;
+  addMessage('user', text);
+  input.value = '';
+  input.style.height = 'auto';
+
+  const fileCtx = buildFileContext();
+  if (fileCtx) {
+    userContent += fileCtx;
+    uploadedFiles = [];
+    renderFileTags();
+  }
+
+  messages.push({ role: 'user', content: userContent });
+
+  isStreaming = true;
+  document.getElementById('sendBtn').disabled = true;
+
+  const aiDiv = addMessage('ai', '');
+  const contentEl = aiDiv.querySelector('.msg-content');
+  contentEl.classList.add('typing');
+
+  try {
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages.slice(-12)],
+        stream: true,
+        max_tokens: 2000,
+        temperature: 0.85,
+      }),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data: ') || line.includes('[DONE]')) continue;
+        try {
+          const data = JSON.parse(line.slice(6));
+          const delta = data.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullText += delta;
+            contentEl.innerHTML = renderMarkdown(fullText);
+            document.getElementById('chatContainer').scrollTop =
+              document.getElementById('chatContainer').scrollHeight;
+          }
+        } catch {}
+      }
+    }
+
+    contentEl.classList.remove('typing');
+    messages.push({ role: 'assistant', content: fullText });
+  } catch (err) {
+    contentEl.classList.remove('typing');
+    contentEl.innerHTML = `<span style="color:#f85149">请求失败: ${err.message}</span>`;
+  }
+
+  isStreaming = false;
+  document.getElementById('sendBtn').disabled = false;
+}
+
+// ========== CLEAR ==========
+function clearChat() {
+  messages = [];
+  const container = document.getElementById('chatContainer');
+  container.innerHTML = `
+    <div class="welcome">
+      <h2>🌟 星辰大海的边界</h2>
+      <p>像跟福建喝茶聊天一样，聊聊投资、产业、市场。<br>支持上传 Word/PPT/PDF/文本 作为参考素材。</p>
+    </div>
+    <div class="quick-prompts" id="quickPrompts">
+      <div class="quick-prompt" onclick="usePrompt('怎么看当前AI应用的投资机会？')">AI应用机会</div>
+      <div class="quick-prompt" onclick="usePrompt('A股现在该买什么方向？')">A股方向</div>
+      <div class="quick-prompt" onclick="usePrompt('半导体设备和材料，哪个弹性更大？')">半导体选择</div>
+      <div class="quick-prompt" onclick="usePrompt('港股现在能不能抄底？')">港股判断</div>
+      <div class="quick-prompt" onclick="usePrompt('商业航天是不是泡沫？')">商业航天</div>
+      <div class="quick-prompt" onclick="usePrompt('现在该不该买黄金？')">黄金观点</div>
+    </div>`;
+}
+
+// ========== AUTO-RESIZE TEXTAREA ==========
+const input = document.getElementById('userInput');
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+});
+
+// ========== MOBILE KEYBOARD ADAPTATION ==========
+if (window.visualViewport) {
+  const chatContainer = document.getElementById('chatContainer');
+  function onViewportResize() {
+    const vv = window.visualViewport;
+    const keyboardHeight = window.innerHeight - vv.height;
+    if (keyboardHeight > 100) {
+      document.body.style.height = vv.height + 'px';
+      requestAnimationFrame(() => { chatContainer.scrollTop = chatContainer.scrollHeight; });
+    } else {
+      document.body.style.height = '';
+    }
+  }
+  window.visualViewport.addEventListener('resize', onViewportResize);
+  window.visualViewport.addEventListener('scroll', onViewportResize);
+}
+
+input.addEventListener('focus', () => {
+  setTimeout(() => {
+    document.getElementById('chatContainer').scrollTop =
+      document.getElementById('chatContainer').scrollHeight;
+    input.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, 300);
+});
+input.addEventListener('blur', () => {
+  setTimeout(() => { document.body.style.height = ''; }, 100);
+});
+
+// ========== LOAD JSZip for PPTX (lazy) ==========
+(function loadJSZip() {
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+  document.head.appendChild(s);
+})();
+
+// ========== LOAD PDF.js worker ==========
+(function loadPdfWorker() {
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+  }
+  // Retry after script loads
+  setTimeout(() => {
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+    }
+  }, 2000);
+})();
+</script>
+</body>
+</html>
